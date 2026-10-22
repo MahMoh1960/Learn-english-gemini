@@ -26,15 +26,23 @@ jobs:
           cp index.html www/
           cp manifest.json www/ || true
           cp sw.js www/ || true
+          cp native-tts.js www/
           find . -maxdepth 1 -type f \( -name '*.png' -o -name '*.svg' -o -name '*.ico' -o -name '*.jpg' -o -name '*.webp' \) -exec cp {} www/ \;
+          sed -i '0,/<script/s//<script src="native-tts.js"><\/script>\n<script/' www/index.html
+          grep -n "native-tts.js" www/index.html
 
       - name: Installer Capacitor
         run: |
           npm init -y
-          npm install @capacitor/core@6 @capacitor/cli@6 @capacitor/android@6
+          npm install @capacitor/core@6 @capacitor/cli@6 @capacitor/android@6 @capacitor-community/text-to-speech@6
           npx cap init "LexiTrilingue Pro" com.mahmoh.lexitrilingue --web-dir www
           npx cap add android
           npx cap sync android
+
+      - name: Autoriser le moteur vocal Android
+        run: |
+          sed -i 's#</manifest>#    <queries>\n        <intent>\n            <action android:name="android.intent.action.TTS_SERVICE" />\n        </intent>\n    </queries>\n</manifest>#' android/app/src/main/AndroidManifest.xml
+          grep -n "TTS_SERVICE" android/app/src/main/AndroidManifest.xml
 
       - name: Compiler l'APK
         run: |
