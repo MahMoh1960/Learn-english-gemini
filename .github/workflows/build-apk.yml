@@ -28,10 +28,12 @@ jobs:
           cp sw.js www/ || true
           cp native-tts.js www/
           cp native-stt.js www/
+          cp glossaire-initial.js www/
           find . -maxdepth 1 -type f \( -name '*.png' -o -name '*.svg' -o -name '*.ico' -o -name '*.jpg' -o -name '*.webp' \) -exec cp {} www/ \;
           sed -i '0,/<script/s//<script src="native-tts.js"><\/script>\n<script/' www/index.html
           sed -i '0,/<script/s//<script src="native-stt.js"><\/script>\n<script/' www/index.html
-          grep -n "native-" www/index.html
+          sed -i '0,/<script/s//<script src="glossaire-initial.js"><\/script>\n<script/' www/index.html
+          grep -n "<script src" www/index.html
 
       - name: Installer Capacitor
         run: |
