@@ -1,6 +1,7 @@
 {
   "name": "LexiTrilingue Pro — Studio Vocal",
   "short_name": "LexiTrilingue",
+  "description": "Application trilingue de traduction contextuelle et lecteur vocal anglais à vitesse continue.",
   "start_url": "./index.html",
   "display": "standalone",
   "orientation": "portrait",
