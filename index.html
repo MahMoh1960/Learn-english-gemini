@@ -464,6 +464,55 @@
       color: var(--gold);
       border: 1px solid var(--gold);
     }
+
+    /* ===== LEXIQUE EN FENÊTRE ===== */
+    .lex-fab {
+      position: fixed;
+      right: 14px;
+      bottom: 16px;
+      z-index: 900;
+      box-shadow: 0 6px 18px rgba(0, 0, 0, 0.6);
+      padding: 12px 18px;
+      font-size: 0.95rem;
+      border-radius: 28px;
+    }
+    .lex-overlay {
+      position: fixed;
+      inset: 0;
+      z-index: 1000;
+      background: rgba(3, 10, 20, 0.82);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 12px;
+    }
+    .lex-overlay.open { display: flex; }
+    .lex-modal {
+      width: 100%;
+      max-width: 640px;
+      max-height: 92vh;
+      max-height: 92dvh;
+      margin: 0;
+      display: flex;
+      flex-direction: column;
+    }
+    .lex-tools {
+      display: flex;
+      gap: 6px;
+      flex-wrap: wrap;
+      margin-bottom: 10px;
+    }
+    .lex-count {
+      font-size: 0.78rem;
+      color: var(--text-muted);
+      margin-bottom: 8px;
+    }
+    #glossary-list {
+      overflow-y: auto;
+      flex: 1;
+      min-height: 120px;
+      -webkit-overflow-scrolling: touch;
+    }
   </style>
 </head>
 <body>
@@ -645,20 +694,29 @@
       </div>
     </div>
 
-    <!-- 5. GLOSSAIRE & EXPORT -->
-    <div class="card">
+    <!-- 5. Glossaire : voir fenêtre « Lexique » en bas de page -->
+  </div>
+
+
+  <!-- Bouton d'accès au lexique -->
+  <button class="btn lex-fab" id="btn-open-lexique">📚 Lexique</button>
+
+  <!-- Fenêtre du lexique -->
+  <div class="lex-overlay" id="lexique-overlay">
+    <div class="card lex-modal" role="dialog" aria-modal="true" aria-label="Lexique">
       <div class="section-title">
         <span>📚 Glossaire Personnel</span>
-        <div style="display:flex; gap:5px; flex-wrap:wrap;">
-          <button class="btn btn-outline btn-small" id="btn-export-csv">📥 CSV</button>
-          <button class="btn btn-outline btn-small" id="btn-export-txt">📄 TXT</button>
-          <button class="btn btn-outline btn-small" id="btn-backup-json">💾 Backup</button>
-        </div>
+        <button class="btn btn-outline btn-small" id="btn-close-lexique">✕ Fermer</button>
+      </div>
+      <div class="lex-tools">
+        <button class="btn btn-outline btn-small" id="btn-export-csv">📥 CSV</button>
+        <button class="btn btn-outline btn-small" id="btn-export-txt">📄 TXT</button>
+        <button class="btn btn-outline btn-small" id="btn-backup-json">💾 Backup</button>
       </div>
       <input type="text" id="glossary-search" placeholder="🔎 Filtrer..." style="margin-bottom:10px;" />
+      <div class="lex-count" id="lex-count"></div>
       <div id="glossary-list"></div>
     </div>
-
   </div>
 
   <script>
@@ -917,6 +975,7 @@
       const container = document.getElementById('glossary-list'), q = searchInput.value.toLowerCase();
       const items = getGlossary().filter(i => !q || i.en.toLowerCase().includes(q) || i.fr.toLowerCase().includes(q) || i.ar.includes(q));
       container.innerHTML = '';
+      const cnt = document.getElementById('lex-count'); if (cnt) cnt.textContent = items.length + ' entrée(s)';
       if (!items.length) { container.innerHTML = '<p style="color:var(--text-muted); font-size:0.84rem;">Aucune entrée.</p>'; return; }
       items.forEach((item, index) => {
         const div = document.createElement('div'); div.className = 'glossary-item';
@@ -957,6 +1016,27 @@
       const blob = new Blob([content], { type: mime }), a = document.createElement('a');
       a.href = URL.createObjectURL(blob); a.download = name; a.click();
     }
+
+    // LEXIQUE EN FENÊTRE
+    (function () {
+      const overlay = document.getElementById('lexique-overlay');
+      const openBtn = document.getElementById('btn-open-lexique');
+      const closeBtn = document.getElementById('btn-close-lexique');
+      function openLex() {
+        triggerHaptic(20); renderGlossary();
+        overlay.classList.add('open'); document.body.style.overflow = 'hidden';
+        try { history.pushState({ lex: 1 }, ''); } catch (e) {}
+      }
+      function hideLex() { overlay.classList.remove('open'); document.body.style.overflow = ''; }
+      function closeLex() {
+        if (history.state && history.state.lex) history.back(); else hideLex();
+      }
+      openBtn.addEventListener('click', openLex);
+      closeBtn.addEventListener('click', closeLex);
+      overlay.addEventListener('click', e => { if (e.target === overlay) closeLex(); });
+      document.addEventListener('keydown', e => { if (e.key === 'Escape' && overlay.classList.contains('open')) closeLex(); });
+      window.addEventListener('popstate', hideLex);
+    })();
 
     if ('serviceWorker' in navigator) { window.addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {})); }
     buildInteractiveWords(); renderGlossary();
