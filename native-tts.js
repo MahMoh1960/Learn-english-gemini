@@ -1,107 +1,80 @@
-/* Lecture vocale native pour l'APK (Capacitor).
-   Remplace speechSynthesis (absent des WebView Android) par le moteur
-   de synthèse vocale du téléphone. Sans effet sur la version web. */
+/* Reconnaissance vocale native pour l'APK (Capacitor).
+   Remplace SpeechRecognition (absent des WebView Android) par le
+   micro et le moteur de reconnaissance du téléphone.
+   Sans effet sur la version web. */
 (function () {
   var C = window.Capacitor;
   if (!C || typeof C.isNativePlatform !== 'function' || !C.isNativePlatform()) return;
 
-  function tts() {
-    return C.Plugins && C.Plugins.TextToSpeech;
+  function plugin() {
+    return C.Plugins && C.Plugins.SpeechRecognition;
   }
 
-  function Utterance(text) {
-    this.text = text || '';
+  function Recognition() {
     this.lang = 'en-US';
-    this.rate = 1;
-    this.pitch = 1;
-    this.volume = 1;
-    this.voice = null;
+    this.continuous = false;
+    this.interimResults = false;
+    this.maxAlternatives = 1;
     this.onstart = null;
-    this.onend = null;
+    this.onresult = null;
     this.onerror = null;
-    this.onboundary = null;
+    this.onend = null;
+    this._running = false;
   }
 
-  var token = 0;
-  var active = null;
-  var last = null;
-
-  var synth = {
-    speaking: false,
-    pending: false,
-    paused: false,
-    onvoiceschanged: null,
-    getVoices: function () { return []; },
-    speak: function (u) {
-      var plugin = tts();
-      last = u;
-      var my = ++token;
-      active = u;
-      synth.speaking = true;
-      if (!plugin) {
-        synth.speaking = false;
-        if (u.onerror) u.onerror({ error: 'plugin-absent' });
-        return;
-      }
-      if (u.onstart) u.onstart();
-      plugin.speak({
-        text: u.text,
-        lang: u.lang || 'en-US',
-        rate: u.rate || 1,
-        pitch: u.pitch || 1,
-        volume: 1,
-        category: 'ambient',
-        queueStrategy: 0
-      }).then(function () {
-        if (my !== token) return;
-        synth.speaking = false;
-        active = null;
-        if (u.onend) u.onend();
-      }).catch(function (err) {
-        if (my !== token) return;
-        synth.speaking = false;
-        active = null;
-        if (u.onerror) u.onerror(err);
-      });
-    },
-    cancel: function () {
-      token++;
-      active = null;
-      synth.speaking = false;
-      synth.paused = false;
-      var plugin = tts();
-      if (plugin) { try { plugin.stop(); } catch (e) {} }
-    },
-    pause: function () {
-      if (!synth.speaking) return;
-      var u = last;
-      synth.cancel();
-      synth.paused = true;
-      last = u;
-    },
-    resume: function () {
-      if (!synth.paused || !last) return;
-      synth.paused = false;
-      synth.speak(last);
-    }
+  Recognition.prototype._fail = function (code) {
+    if (this.onerror) this.onerror({ error: code });
+    this._finish();
   };
 
-  try {
-    Object.defineProperty(window, 'speechSynthesis', { value: synth, configurable: true });
-  } catch (e) {
-    window.speechSynthesis = synth;
-  }
-  window.SpeechSynthesisUtterance = Utterance;
+  Recognition.prototype._finish = function () {
+    if (!this._running) return;
+    this._running = false;
+    if (this.onend) this.onend();
+  };
 
-  // Surlignage mot à mot (si le moteur le permet)
-  try {
-    var plugin = tts();
-    if (plugin && plugin.addListener) {
-      plugin.addListener('onRangeStart', function (ev) {
-        if (active && active.onboundary && ev && typeof ev.start === 'number') {
-          active.onboundary({ name: 'word', charIndex: ev.start });
-        }
+  Recognition.prototype.start = function () {
+    var self = this;
+    var p = plugin();
+    if (!p) { self._running = true; self._fail('service-not-allowed'); return; }
+    if (self._running) return;
+    self._running = true;
+
+    p.checkPermissions()
+      .then(function (s) {
+        if (s && s.speechRecognition === 'granted') return s;
+        return p.requestPermissions();
+      })
+      .then(function (s) {
+        if (!s || s.speechRecognition !== 'granted') throw { denied: true };
+        if (self.onstart) self.onstart();
+        return p.start({
+          language: self.lang || 'en-US',
+          maxResults: Math.max(1, self.maxAlternatives || 1),
+          prompt: '',
+          partialResults: false,
+          popup: false
+        });
+      })
+      .then(function (r) {
+        var matches = (r && r.matches) || [];
+        if (!matches.length) { self._fail('no-speech'); return; }
+        var alts = matches.map(function (t) { return { transcript: t, confidence: 1 }; });
+        alts.isFinal = true;
+        if (self.onresult) self.onresult({ resultIndex: 0, results: [alts] });
+        self._finish();
+      })
+      .catch(function (err) {
+        self._fail(err && err.denied ? 'not-allowed' : 'no-speech');
       });
-    }
-  } catch (e) {}
+  };
+
+  Recognition.prototype.stop = function () {
+    var p = plugin();
+    if (p) { try { p.stop(); } catch (e) {} }
+  };
+  Recognition.prototype.abort = Recognition.prototype.stop;
+
+  window.SpeechRecognition = Recognition;
+  window.webkitSpeechRecognition = Recognition;
 })();
